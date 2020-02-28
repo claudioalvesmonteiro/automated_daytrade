@@ -3,45 +3,22 @@ TRADE
 '''
 
 # 
-msft = yf.Ticker("^BVSP")
-print(msft)
-msft.info
+#import the libraries
+import pandas as pd
+#download tick data for AAPL stock
+data = pd.read_csv("https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=^BVSP&interval=1min&outputsize=full&apikey=UDCCZOE6N1IMGNER&datatype=csv")
+data
 
-# pegar dados historicos
-data = msft.history(period="max")
+#https://www.alphavantage.co/documentation/
 
-# reset index
-#data.reset_index(inplace=True)
 
-# select columns
-data = data[['Close']]
+df = pd.read_csv('https://raw.githubusercontent.com/plotly/datasets/master/finance-charts-apple.csv')
+df.head()
 
-# transform in datetime
-data.index = pd.to_datetime(data.index)
-
-# visu
-import plotly.plotly as ply
-import cufflinks as cf
-
-data.iplot(title="IBOV")
-
-#==================================
-# dale
-#==================================
-
-# data
-
-def modellingSARIMA(data, target, pred_intervals):
-
-    # importar modelo
-    from statsmodels.tsa.statespace.sarimax import SARIMAX
-
-    # executar modelo
-    model = SARIMAX(data[target], order=(1, 0, 0), seasonal_order=(1, 1, 1, 12))
-    model_fit = model.fit(disp=False)
-
-    # previsoes para proximos pred_intervals 
-    predicted = model_fit.predict(len(data), (len(data)+pred_intervals) )   
-
-    # retornar valores preditos
-    return predicted 
+trace = go.Candlestick(x=df['timestamp'],
+                open=df['open'],
+                high=df['high'],
+                low=df['low'],
+                close=df['close'])
+data = [trace]
+py.iplot(data, filename='simple_candlestick')

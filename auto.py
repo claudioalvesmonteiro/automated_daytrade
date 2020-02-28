@@ -25,7 +25,10 @@ def generatePlotData(model, data, interval, future_forecast):
     if model == 'autoarima':
         prediction = pd.DataFrame(interval, future_forecast)
         prediction.reset_index(inplace=True)
+        print(prediction.head())
+        prediction.columns = ['Close', 'Date']
         prediction['Date'] = prediction['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
+        data['Date'] = data['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
         datapred = pd.merge(data, prediction, how = 'outer', on = 'Date')
     elif model == 'prophet':
         prediction = future_forecast[['yhat', 'ds']]
@@ -55,7 +58,7 @@ def autoModels(model, data, start_date, end_date):
 
         print('AutoARIMA generation: ')
 
-        stepwise_model = auto_arima(data['Close'], 
+        stepwise_model = auto_arima(data['Close'][0:800], 
                                     trace=True, 
                                     error_action='ignore', 
                                     suppress_warnings=True,
@@ -65,8 +68,8 @@ def autoModels(model, data, start_date, end_date):
                                     d=1, D=1)
         print(stepwise_model.aic())
 
-        stepwise_model.fit(data[['Close']])
-        future_forecast = stepwise_model.predict(n_periods=pred_intervals)
+        stepwise_model.fit(data[['Close']][0:800])
+        future_forecast = stepwise_model.predict(n_periods=pred_intervals+1)
     
     # facebook PROPHET
     elif model == 'prophet':
