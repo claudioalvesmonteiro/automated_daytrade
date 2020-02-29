@@ -54,22 +54,27 @@ def autoModels(model, data, start_date, end_date):
 
     # AUTOARIMA
     if model == 'autoarima':
-        import statsmodels.api as sm
+        from pyramid.arima import auto_arima
 
-        print('SARIMA generation: ')
+        print('AutoARIMA generation: ')
 
-        mod = sm.tsa.statespace.SARIMAX(data['Close'],
-                                order=(1, 1, 0),
-                                seasonal_order=(1, 1, 1, 12),
-                                enforce_stationarity=False,
-                                enforce_invertibility=False)
-        results = mod.fit()
+        stepwise_model = auto_arima(data['Close'][0:800], 
+                                    trace=True, 
+                                    error_action='ignore', 
+                                    suppress_warnings=True,
+                                    start_p=1, start_q=1,
+                                    max_p=3, max_q=3, m=12,
+                                    start_P=0, seasonal=True,
+                                    d=1, D=1)
+        print(stepwise_model.aic())
 
-        future_forecast = results.predict(start=len(data), end=len(data)+pred_intervals, dynamic=False)
+        stepwise_model.fit(data[['Close']][0:800])
+        future_forecast = stepwise_model.predict(n_periods=pred_intervals+1)
     
     # facebook PROPHET
     elif model == 'prophet':
         from fbprophet import Prophet
+
         print('PROPHET generation: ')
 
         pdf = data
