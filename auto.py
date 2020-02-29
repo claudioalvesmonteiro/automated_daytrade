@@ -19,25 +19,35 @@ def getTrade(trade, periods):
     return data[len(data)-periods:len(data)]
 
 
-def generatePlotData(model, data, interval, future_forecast):
+def generatePlotData(model, data, interval, future_forecast, future_forecast2):
     import pandas as pd
 
     if model == 'autoarima':
-        prediction = pd.DataFrame(interval, future_forecast)
+
+        prediction = pd.DataFrame(list(data['Date'][800:len(data)]), future_forecast)
         prediction.reset_index(inplace=True)
-        print(prediction.head())
         prediction.columns = ['Close', 'Date']
         prediction['Date'] = prediction['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
         data['Date'] = data['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
         datapred = pd.merge(data, prediction, how = 'outer', on = 'Date')
+
+        prediction2 = pd.DataFrame(interval[len(data)-800: len(interval)], future_forecast2)
+        prediction2.reset_index(inplace=True)
+        prediction2.columns = ['Close', 'Date']
+        prediction2['Date'] = prediction['Date'].apply(lambda x: x.strftime('%Y-%m-%d'))
+        datapred = pd.merge(datapred, prediction2, how = 'outer', on = 'Date')
+
+        datapred.columns = ['date', 'valor original', 'valor predito passado', 'valor predito futuro']
+
+
     elif model == 'prophet':
         prediction = future_forecast[['yhat', 'ds']]
         prediction['ds'] = prediction['ds'].apply(lambda x: x.strftime('%Y-%m-%d'))
         data['ds'] = data['ds'].apply(lambda x: x.strftime('%Y-%m-%d'))
         datapred = pd.merge(data, prediction, how = 'outer', on = 'ds')
+        datapred.columns = ['date', 'valor original', 'valor predito']
 
     # rename target columns and merge outer
-    datapred.columns = ['date', 'valor original', 'valor predito']
     return datapred
 
 
@@ -45,12 +55,17 @@ def autoModels(model, data, start_date, end_date):
 
     import pandas as pd
 
-    # define interval
-    interval = pd.date_range(start=start_date, end=end_date, freq='d') 
-    pred_intervals = (len(interval)-1)
-
     # index to date
     data.reset_index(inplace=True)
+
+    # define interval
+    if model == 'autoarima':
+        interval = pd.date_range(start=start_date, end=data['Date'][len(data)-1], freq='d') 
+    else:
+        interval = pd.date_range(start=start_date, end=end_date, freq='d') 
+
+    interval = interval[interval.dayofweek < 5] ############################
+    pred_intervals = (len(interval)-1)
 
     # AUTOARIMA
     if model == 'autoarima':
@@ -65,10 +80,12 @@ def autoModels(model, data, start_date, end_date):
                                 enforce_invertibility=False)
         results = mod.fit()
 
-        future_forecast = results.predict(start=len(data), end=len(data)+pred_intervals, dynamic=False)
+        future_forecast = results.predict(start=801, end=len(data), dynamic=False)
+        future_forecast2 = results.predict(start=len(data), end= pred_intervals-(len(data)-800), dynamic=False)
+        #future_forecast = results.predict(start=len(data), end=len(data), dynamic=False)
     
     # facebook PROPHET
-    elif model == 'prophet':
+    if model == 'prophet':
         from fbprophet import Prophet
         print('PROPHET generation: ')
 
@@ -79,9 +96,10 @@ def autoModels(model, data, start_date, end_date):
         prophet_model.fit(pdf)
         future = prophet_model.make_future_dataframe(periods=pred_intervals)
         future_forecast = prophet_model.predict(future)
+        future_forecast2 = future_forecast
 
     # capture data
-    datapred = generatePlotData(model, data, interval, future_forecast)
+    datapred = generatePlotData(model, data, interval, future_forecast, future_forecast2)
     
     return datapred
 
@@ -106,27 +124,38 @@ def layLine(min, max):
     return layout
 
 
-def predPlot(datapred):
+def predPlot(datapred, model):
 
     import plotly.plotly as ply
     import cufflinks as cf
 
     # min and max on plot
     mini = datapred['valor original'].min()-datapred['valor original'].min()*0.15
-    maxi = datapred['valor predito'].max()+datapred['valor predito'].max()*0.15
+    maxi = datapred['valor original'].max()+datapred['valor original'].max()*0.25
+    
     # definir layout
     layout = layLine(mini, maxi)
 
     # index to layout
     datapred.set_index('date', inplace=True)
+
+    print(datapred.tail())
     
     # forecast visualization
-    datapred[['valor original', 'valor predito']].iplot(mode='lines',
-                                    size = 8,
-                                    colors=['#87cded', 'pink'],
-                                    layout=layout.to_plotly_json(),
-                                    filename='test')
+    if model == 'prophet':
+        datapred[['valor original', 'valor predito']].iplot(mode='lines',
+                                        size = 8,
+                                        colors=['#87cded', 'pink'],
+                                        layout=layout.to_plotly_json(),
+                                        filename='test')
+    else:
+        datapred[['valor original','valor predito passado', 'valor predito futuro']].iplot(mode='lines',
+                                        size = 8,
+                                        colors=['#87cded', 'pink', 'red'],
+                                        layout=layout.to_plotly_json(),
+                                        filename='test')
 
+        
 
 def gerar_previsao(indice, modelo, periodos_anteriores, start_date, end_date):
     # get trade
@@ -134,4 +163,4 @@ def gerar_previsao(indice, modelo, periodos_anteriores, start_date, end_date):
     # get prediction
     predicted = autoModels(modelo, data, start_date, end_date)
     # plot prediction
-    predPlot(predicted)
+    predPlot(predicted, modelo)
